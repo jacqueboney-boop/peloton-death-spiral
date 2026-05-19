@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Peloton: The Death Spiral</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --black: #0a0a0a;
+    --red: #e63946;
+    --orange: #f4a261;
+    --yellow: #e9c46a;
+    --green: #2a9d8f;
+    --blue: #457b9d;
+    --light: #f1faee;
+    --gray: #adb5bd;
+    --card-bg: #141414;
+    --border: #2a2a2a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--black);
+    color: var(--light);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 40px 20px;
+    background: radial-gradient(ellipse at center, #1a0505 0%, #0a0a0a 70%);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    border: 1px solid rgba(230,57,70,0.15);
+    animation: pulse 4s ease-in-out infinite;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    width: 900px; height: 900px;
+    border-radius: 50%;
+    border: 1px solid rgba(230,57,70,0.07);
+    animation: pulse 4s ease-in-out infinite 1s;
+  }
+  @keyframes pulse {
+    0%,100% { transform: scale(1); opacity:1; }
+    50% { transform: scale(1.05); opacity:0.5; }
+  }
+  .hero-tag {
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--red); margin-bottom: 20px; position: relative; z-index:1;
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 800; line-height: 1.1;
+    position: relative; z-index:1;
+  }
+  .hero h1 span { color: var(--red); }
+  .hero-sub {
+    font-size: 1.1rem; color: var(--gray); max-width: 600px;
+    margin: 20px auto 0; position: relative; z-index:1;
+  }
+  .scroll-hint {
+    position: absolute; bottom: 30px;
+    animation: bounce 2s infinite;
+    font-size: 24px; color: var(--gray);
+    z-index: 1;
+  }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(8px)} }
+
+  /* ── SECTIONS ── */
+  section {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 80px 24px;
+  }
+  .section-label {
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--red); margin-bottom: 12px;
+  }
+  h2 {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 700; margin-bottom: 16px;
+  }
+  .lead {
+    font-size: 1.1rem; color: var(--gray); max-width: 700px; margin-bottom: 40px;
+  }
+
+  /* ── SPIRAL DIAGRAM ── */
+  .spiral-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0; margin: 40px 0;
+  }
+  .spiral-step {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 28px;
+    width: 100%; max-width: 680px;
+    cursor: pointer;
+    transition: border-color 0.3s, transform 0.2s;
+    position: relative;
+  }
+  .spiral-step:hover { border-color: var(--red); transform: translateX(6px); }
+  .spiral-step.active { border-color: var(--red); background: #1a0505; }
+  .step-num {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--red); display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 1rem; flex-shrink: 0;
+  }
+  .step-content h3 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .step-content p { font-size: 0.85rem; color: var(--gray); }
+  .step-arrow {
+    text-align: center; color: var(--red); font-size: 1.5rem;
+    margin: 4px 0;
+  }
+  .step-data {
+    margin-left: auto; text-align: right; flex-shrink: 0;
+  }
+  .step-data .val { font-size: 1.3rem; font-weight: 800; color: var(--red); }
+  .step-data .lbl { font-size: 0.7rem; color: var(--gray); }
+
+  /* ── STAT CARDS ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; margin: 40px 0;
+  }
+  .stat-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px;
+    transition: border-color 0.3s;
+  }
+  .stat-card:hover { border-color: var(--red); }
+  .stat-card .label { font-size: 0.75rem; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .stat-card .value { font-size: 2rem; font-weight: 800; }
+  .stat-card .delta { font-size: 0.8rem; margin-top: 4px; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+
+  /* ── CHARTS ── */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 24px; margin: 40px 0;
+  }
+  .chart-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px;
+  }
+  .chart-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+  .chart-card p { font-size: 0.8rem; color: var(--gray); margin-bottom: 20px; }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── FIXED COST CALC ── */
+  .calc-box {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 32px; margin: 40px 0;
+  }
+  .calc-box h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+  .calc-box p { font-size: 0.85rem; color: var(--gray); margin-bottom: 24px; }
+  .slider-row { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  .slider-row label { font-size: 0.85rem; color: var(--gray); min-width: 220px; }
+  input[type=range] {
+    flex: 1; accent-color: var(--red);
+    height: 4px; cursor: pointer;
+  }
+  .slider-val { font-weight: 700; min-width: 80px; text-align: right; }
+  .calc-result {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px; margin-top: 24px;
+    padding-top: 24px; border-top: 1px solid var(--border);
+  }
+  .calc-item .lbl { font-size: 0.75rem; color: var(--gray); margin-bottom: 4px; }
+  .calc-item .val { font-size: 1.6rem; font-weight: 800; }
+  .calc-item .val.danger { color: var(--red); }
+  .calc-item .val.warn { color: var(--orange); }
+  .calc-item .val.ok { color: var(--green); }
+
+  /* ── TIMELINE ── */
+  .timeline { position: relative; margin: 40px 0; }
+  .timeline::before {
+    content: ''; position: absolute; left: 20px; top: 0; bottom: 0;
+    width: 2px; background: var(--border);
+  }
+  .tl-item {
+    display: flex; gap: 24px; margin-bottom: 32px; position: relative;
+  }
+  .tl-dot {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 2px solid var(--border); background: var(--card-bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 0.75rem; font-weight: 700;
+    z-index: 1;
+  }
+  .tl-dot.red { border-color: var(--red); color: var(--red); }
+  .tl-dot.orange { border-color: var(--orange); color: var(--orange); }
+  .tl-dot.yellow { border-color: var(--yellow); color: var(--yellow); }
+  .tl-dot.green { border-color: var(--green); color: var(--green); }
+  .tl-content { padding-top: 8px; }
+  .tl-content .year { font-size: 0.75rem; color: var(--gray); margin-bottom: 4px; }
+  .tl-content h4 { font-weight: 700; margin-bottom: 4px; }
+  .tl-content p { font-size: 0.85rem; color: var(--gray); }
+
+  /* ── INSIGHT BOX ── */
+  .insight {
+    background: linear-gradient(135deg, #1a0505, #0f0f0f);
+    border: 1px solid var(--red);
+    border-radius: 12px; padding: 32px; margin: 40px 0;
+  }
+  .insight h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; color: var(--red); }
+  .insight p { font-size: 0.95rem; color: var(--light); line-height: 1.8; }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center; padding: 40px 20px;
+    border-top: 1px solid var(--border);
+    color: var(--gray); font-size: 0.8rem;
+  }
+
+  /* ── TABS ── */
+  .tab-bar {
+    display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .tab-btn {
+    padding: 8px 18px; border-radius: 20px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--gray); cursor: pointer; font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  .tab-btn.active, .tab-btn:hover {
+    background: var(--red); border-color: var(--red); color: white;
+  }
+
+  /* ── TOOLTIP ── */
+  .tooltip-box {
+    background: #1e1e1e; border: 1px solid var(--red);
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 0.8rem; max-width: 240px;
+  }
+
+  @media (max-width: 600px) {
+    .spiral-step { flex-wrap: wrap; }
+    .step-data { margin-left: 0; text-align: left; }
+    .slider-row { flex-wrap: wrap; }
+    .slider-row label { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ HERO ══════════════ -->
+<div class="hero">
+  <div class="hero-tag">⚠ Cost Allocation Economics · Real Data · Peloton (PTON)</div>
+  <h1>Peloton's<br><span>Death Spiral</span></h1>
+  <p class="hero-sub">How a demand-driven collapse in subscribers forces fixed costs onto fewer members — and why the math keeps getting worse.</p>
+  <div class="scroll-hint">↓</div>
+</div>
+
+<!-- ══════════════ SECTION 1: WHAT IS A DEATH SPIRAL ══════════════ -->
+<section>
+  <div class="section-label">The Concept</div>
+  <h2>What is a Death Spiral?</h2>
+  <p class="lead">When demand drops, fixed costs must be spread over fewer units — raising the cost per unit, which can trigger further demand loss. Peloton is a textbook case.</p>
+
+  <div class="spiral-wrap">
+    <div class="spiral-step active" onclick="highlightStep(this)">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Subscribers Decline</h3>
+        <p>Post-pandemic demand collapses. Paid connected fitness subs peak at ~2.97M and fall.</p>
+      </div>
+      <div class="step-data">
+        <div class="val">−23%</div>
+        <div class="lbl">Subs FY21→FY25</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+    <div class="spiral-step" onclick="highlightStep(this)">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Fixed Costs Don't Fall</h3>
+        <p>Platform, content, R&D, and infrastructure costs remain largely fixed regardless of subscriber count.</p>
+      </div>
+      <div class="step-data">
+        <div class="val">$1.5B</div>
+        <div class="lbl">Total Debt (FY25)</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+    <div class="spiral-step" onclick="highlightStep(this)">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>Cost Per Subscriber Rises</h3>
+        <p>Each remaining member absorbs a larger share of fixed overhead, squeezing unit economics.</p>
+      </div>
+      <div class="step-data">
+        <div class="val">+19.6%</div>
+        <div class="lbl">Interest Exp YoY</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+    <div class="spiral-step" onclick="highlightStep(this)">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h3>Churn Accelerates</h3>
+        <p>Higher effective cost burden and weaker value proposition drive more members to cancel.</p>
+      </div>
+      <div class="step-data">
+        <div class="val">1.6%</div>
+        <div class="lbl">Monthly Churn FY25</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+    <div class="spiral-step" onclick="highlightStep(this)">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <h3>Revenue Falls Further</h3>
+        <p>Fewer subscribers → less subscription revenue → harder to cover fixed costs → repeat.</p>
+      </div>
+      <div class="step-data">
+        <div class="val">−7.8%</div>
+        <div class="lbl">Revenue FY25 YoY</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 2: KEY STATS ══════════════ -->
+<section style="background: #0d0d0d; max-width:100%; padding: 60px 24px;">
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="section-label">Real Data · Peloton Financials</div>
+    <h2>The Numbers Tell the Story</h2>
+    <p class="lead">All figures sourced from Peloton's SEC filings and earnings reports (FY ends June 30).</p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="label">Peak Revenue (FY21)</div>
+        <div class="value">$4.0B</div>
+        <div class="delta down">↓ 38% to $2.49B by FY25</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Net Loss FY22</div>
+        <div class="value" style="color:var(--red)">−$2.83B</div>
+        <div class="delta down">Worst year on record</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Paid CF Subs (FY25)</div>
+        <div class="value">2.77M</div>
+        <div class="delta down">↓ from ~2.97M peak</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Monthly Churn FY25</div>
+        <div class="value" style="color:var(--orange)">1.6%</div>
+        <div class="delta down">↑ from 1.3% in FY23</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Subscription Gross Margin</div>
+        <div class="value" style="color:var(--green)">69.1%</div>
+        <div class="delta up">↑ High-margin core asset</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Free Cash Flow FY25</div>
+        <div class="value" style="color:var(--green)">+$324M</div>
+        <div class="delta up">↑ from −$86M in FY24</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total Debt (FY25)</div>
+        <div class="value" style="color:var(--red)">$1.5B</div>
+        <div class="delta down">10.9% effective rate</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Interest Expense FY25</div>
+        <div class="value" style="color:var(--red)">$134.5M</div>
+        <div class="delta down">↑ 19.6% YoY</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 3: CHARTS ══════════════ -->
+<section>
+  <div class="section-label">Visual Analysis</div>
+  <h2>Visualizing the Spiral</h2>
+  <p class="lead">Hover over any data point to explore the numbers.</p>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showChart('revenue')">Revenue</button>
+    <button class="tab-btn" onclick="showChart('subs')">Subscribers</button>
+    <button class="tab-btn" onclick="showChart('churn')">Churn</button>
+    <button class="tab-btn" onclick="showChart('margin')">Margins</button>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card" id="chart-revenue">
+      <h3>Total Revenue vs. Net Loss</h3>
+      <p>Revenue peaked in FY21 and has declined every year since. Net losses have improved but remain significant.</p>
+      <div class="chart-wrap"><canvas id="revenueChart"></canvas></div>
+    </div>
+    <div class="chart-card" id="chart-subs" style="display:none">
+      <h3>Paid Connected Fitness Subscriptions</h3>
+      <p>The subscriber base has been contracting — the engine of the death spiral.</p>
+      <div class="chart-wrap"><canvas id="subsChart"></canvas></div>
+    </div>
+    <div class="chart-card" id="chart-churn" style="display:none">
+      <h3>Monthly Churn Rate Trend</h3>
+      <p>Churn is rising — each additional churned member raises the fixed cost burden on those who remain.</p>
+      <div class="chart-wrap"><canvas id="churnChart"></canvas></div>
+    </div>
+    <div class="chart-card" id="chart-margin" style="display:none">
+      <h3>Gross Margin by Segment</h3>
+      <p>Subscription margin is strong. Hardware margin collapsed and is only now recovering.</p>
+      <div class="chart-wrap"><canvas id="marginChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Fixed Cost Absorption Problem</h3>
+      <p>As subscribers fall, fixed overhead per subscriber rises — the core death spiral mechanic.</p>
+      <div class="chart-wrap"><canvas id="fixedCostChart"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 4: INTERACTIVE CALCULATOR ══════════════ -->
+<section style="background: #0d0d0d; max-width:100%; padding: 60px 24px;">
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="section-label">Interactive Model</div>
+    <h2>The Death Spiral Calculator</h2>
+    <p class="lead">Adjust the sliders to see how subscriber loss amplifies the fixed cost burden — and what it means for Peloton's unit economics.</p>
+
+    <div class="calc-box">
+      <h3>Peloton Fixed Cost Simulator</h3>
+      <p>Based on real FY25 data: ~$1.67B subscription revenue, ~69% gross margin, ~$1.5B debt, $134.5M interest expense.</p>
+
+      <div class="slider-row">
+        <label>Paid CF Subscribers (millions)</label>
+        <input type="range" id="sliderSubs" min="1.5" max="3.5" step="0.05" value="2.77" oninput="calcSpiral()">
+        <span class="slider-val" id="valSubs">2.77M</span>
+      </div>
+      <div class="slider-row">
+        <label>Annual Fixed Platform Costs ($M)</label>
+        <input type="range" id="sliderFixed" min="400" max="1200" step="10" value="750" oninput="calcSpiral()">
+        <span class="slider-val" id="valFixed">$750M</span>
+      </div>
+      <div class="slider-row">
+        <label>Monthly Subscription Price ($)</label>
+        <input type="range" id="sliderPrice" min="24" max="60" step="1" value="44" oninput="calcSpiral()">
+        <span class="slider-val" id="valPrice">$44</span>
+      </div>
+      <div class="slider-row">
+        <label>Monthly Churn Rate (%)</label>
+        <input type="range" id="sliderChurn" min="0.5" max="4.0" step="0.1" value="1.6" oninput="calcSpiral()">
+        <span class="slider-val" id="valChurn">1.6%</span>
+      </div>
+
+      <div class="calc-result">
+        <div class="calc-item">
+          <div class="lbl">Annual Sub Revenue</div>
+          <div class="val ok" id="calcRevenue">$1.46B</div>
+        </div>
+        <div class="calc-item">
+          <div class="lbl">Fixed Cost / Subscriber / Yr</div>
+          <div class="val warn" id="calcFCPS">$271</div>
+        </div>
+        <div class="calc-item">
+          <div class="lbl">Subscribers Lost / Month</div>
+          <div class="val danger" id="calcChurnAbs">44K</div>
+        </div>
+        <div class="calc-item">
+          <div class="lbl">Revenue Lost / Month</div>
+          <div class="val danger" id="calcRevLost">$1.9M</div>
+        </div>
+        <div class="calc-item">
+          <div class="lbl">Contribution Margin / Sub</div>
+          <div class="val" id="calcCM">$30.4</div>
+        </div>
+        <div class="calc-item">
+          <div class="lbl">Spiral Risk</div>
+          <div class="val" id="calcRisk">⚠ HIGH</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 5: TIMELINE ══════════════ -->
+<section>
+  <div class="section-label">Historical Context</div>
+  <h2>How Peloton Fell Into the Spiral</h2>
+  <p class="lead">The death spiral didn't happen overnight. Here's the sequence of events.</p>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot green">FY20</div>
+      <div class="tl-content">
+        <div class="year">FY2020 · Revenue: $1.83B</div>
+        <h4>🚀 Pandemic Boom</h4>
+        <p>COVID lockdowns drive explosive demand. Revenue nearly doubles. Peloton can't manufacture bikes fast enough. Fixed costs easily absorbed across a surging subscriber base.</p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot green">FY21</div>
+      <div class="tl-content">
+        <div class="year">FY2021 · Revenue: $4.02B · Peak</div>
+        <h4>📈 All-Time High</h4>
+        <p>Revenue hits $4B. Peloton invests aggressively — $337M in CapEx, $248M in R&D, $662M in SG&A. Fixed cost base balloons. This bet requires sustained demand growth.</p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot red">FY22</div>
+      <div class="tl-content">
+        <div class="year">FY2022 · Revenue: $3.58B · Net Loss: −$2.83B</div>
+        <h4>💥 The Collapse Begins</h4>
+        <p>Gyms reopen. Demand evaporates. Revenue falls 11%. But fixed costs — built for a $4B company — don't shrink. Cost of revenue alone is $2.88B on $3.58B in sales. Gross margin collapses to 19.5%.</p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot red">FY23</div>
+      <div class="tl-content">
+        <div class="year">FY2023 · Revenue: $2.80B · Net Loss: −$1.26B</div>
+        <h4>🔻 Death Spiral Deepens</h4>
+        <p>Revenue falls another 22%. Restructuring charges of $189M. Churn rises to 1.3%. Each subscriber now carries a heavier fixed cost burden. The spiral is self-reinforcing.</p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot orange">FY24</div>
+      <div class="tl-content">
+        <div class="year">FY2024 · Revenue: $2.70B · Net Loss: −$552M</div>
+        <h4>🔧 Restructuring Begins</h4>
+        <p>New CEO Barry McCarthy implements cost cuts. Gross margin recovers to 44.7%. But subscriber churn rises to 1.4% and paid subs fall to ~2.98M. FCF still negative at −$86M.</p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot yellow">FY25</div>
+      <div class="tl-content">
+        <div class="year">FY2025 · Revenue: $2.49B · Net Loss: −$119M</div>
+        <h4>⚖️ Stabilizing, But Not Fixed</h4>
+        <p>FCF turns positive at +$324M. Subscription gross margin hits 69.1%. But churn rises to 1.6%, subs fall to ~2.77M, and $1.5B in debt at 10.9% interest keeps fixed costs elevated. The spiral is slowing — not reversed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 6: INSIGHT ══════════════ -->
+<section style="background: #0d0d0d; max-width:100%; padding: 60px 24px;">
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="section-label">CFO Insight</div>
+    <h2>What This Means for Peloton's CFO</h2>
+
+    <div class="insight">
+      <h3>The Core Problem: Fixed Costs Built for a Bigger Business</h3>
+      <p>Peloton built its cost structure for a $4B company. Today it operates a $2.5B company — but the fixed cost base (debt service, platform infrastructure, content production) doesn't scale down proportionally. Every subscriber who churns forces the remaining ~2.77M members to absorb a larger share of those fixed costs, which weakens the value proposition and accelerates further churn. This is the textbook demand-driven death spiral from cost allocation economics.</p>
+    </div>
+
+    <div class="insight" style="border-color: var(--orange);">
+      <h3 style="color:var(--orange);">The Practical Capacity Problem</h3>
+      <p>Peloton's content platform, instructor talent, and technology infrastructure were built for theoretical capacity far above current utilization. Using a <strong>practical capacity overhead rate</strong> — allocating fixed costs based on what the platform <em>can</em> handle, not what it currently serves — would reveal the true cost of excess capacity: roughly <strong>$134.5M in annual interest alone</strong> divided across 2.77M subscribers equals <strong>~$48.5 per subscriber per year</strong> in debt service alone, before any other fixed costs. That's a structural drag that churn makes worse.</p>
+    </div>
+
+    <div class="insight" style="border-color: var(--green);">
+      <h3 style="color:var(--green);">The Path Out: Subscription Revenue as the Lifeline</h3>
+      <p>The 69.1% subscription gross margin is Peloton's most valuable asset. At $44/month per subscriber, the subscription business generates strong incremental contribution margin. The CFO's challenge is to stabilize and grow this base — even modestly — while continuing to reduce fixed overhead. If churn can be brought back to 1.2% (Q3 FY25 levels) and held, the math begins to work. The spiral can be broken, but only if fixed cost reduction outpaces subscriber attrition.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ FOOTER ══════════════ -->
+<footer>
+  <p>Data sourced from Peloton Interactive (PTON) SEC filings, MarketBeat, and earnings reports (FY2020–FY2025).</p>
+  <p style="margin-top:8px;">Built for MAC 888 · UNC Kenan-Flagler Business School · Death Spiral Analysis</p>
+</footer>
+
+<script>
+// ── SPIRAL STEP HIGHLIGHT ──
+function highlightStep(el) {
+  document.querySelectorAll('.spiral-step').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── CHART TAB SWITCHING ──
+function showChart(name) {
+  ['revenue','subs','churn','margin'].forEach(n => {
+    const el = document.getElementById('chart-' + n);
+    if (el) el.style.display = n === name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', btn.textContent.toLowerCase().includes(name.substring(0,3)));
+  });
+}
+
+// ── CHART DEFAULTS ──
+const chartDefaults = {
+  plugins: {
+    legend: { labels: { color: '#adb5bd', font: { size: 11 } } },
+    tooltip: {
+      backgroundColor: '#1e1e1e',
+      borderColor: '#e63946',
+      borderWidth: 1,
+      titleColor: '#f1faee',
+      bodyColor: '#adb5bd',
+    }
+  },
+  scales: {
+    x: { ticks: { color: '#adb5bd', font:{size:10} }, grid: { color: '#1e1e1e' } },
+    y: { ticks: { color: '#adb5bd', font:{size:10} }, grid: { color: '#1e1e1e' } }
+  }
+};
+
+// ── REVENUE CHART ──
+new Chart(document.getElementById('revenueChart'), {
+  type: 'bar',
+  data: {
+    labels: ['FY20','FY21','FY22','FY23','FY24','FY25'],
+    datasets: [
+      {
+        label: 'Revenue ($B)',
+        data: [1.83, 4.02, 3.58, 2.80, 2.70, 2.49],
+        backgroundColor: 'rgba(69,123,157,0.7)',
+        borderColor: '#457b9d', borderWidth: 1, yAxisID: 'y'
+      },
+      {
+        label: 'Net Loss ($B)',
+        data: [-0.07, -0.19, -2.83, -1.26, -0.55, -0.12],
+        type: 'line',
+        borderColor: '#e63946', backgroundColor: 'rgba(230,57,70,0.1)',
+        fill: true, tension: 0.4, pointRadius: 5, yAxisID: 'y'
+      }
+    ]
+  },
+  options: {
+    ...chartDefaults,
+    scales: {
+      x: { ticks:{color:'#adb5bd',font:{size:10}}, grid:{color:'#1e1e1e'} },
+      y: { ticks:{color:'#adb5bd',font:{size:10}}, grid:{color:'#1e1e1e'} }
+    }
+  }
+});
+
+// ── SUBSCRIBERS CHART ──
+new Chart(document.getElementById('subsChart'), {
+  type: 'line',
+  data: {
+    labels: ['FY21','FY22','FY23','FY24 Q1','FY24 Q2','FY24 Q3','FY24 Q4','FY25 Q1','FY25 Q2','FY25 Q3'],
+    datasets: [{
+      label: 'Paid CF Subs (M)',
+      data: [2.33, 2.97, 2.97, 3.08, 3.03, 2.99, 2.98, 2.88, 2.88, 2.88],
+      borderColor: '#e63946',
+      backgroundColor: 'rgba(230,57,70,0.1)',
+      fill: true, tension: 0.4, pointRadius: 4,
+      pointBackgroundColor: '#e63946'
+    }]
+  },
+  options: { ...chartDefaults,
+    scales: {
+      x: { ticks:{color:'#adb5bd',font:{size:9}}, grid:{color:'#1e1e1e'} },
+      y: { ticks:{color:'#adb5bd',font:{size:10}}, grid:{color:'#1e1e1e'}, min: 2.0, max: 3.5 }
+    }
+  }
+});
+
+// ── CHURN CHART ──
+new Chart(document.getElementById('churnChart'), {
+  type: 'line',
+  data: {
+    labels: ['FY23','FY24 Q1','FY24 Q2','FY24 Q3','FY24 Q4','FY25 Q1','FY25 Q2','FY25 Q3','FY25 Q4'],
+    datasets: [{
+      label: 'Monthly Churn (%)',
+      data: [1.3, 1.2, 1.4, 1.7, 1.9, 1.8, 1.4, 1.2, 1.6],
+      borderColor: '#f4a261',
+      backgroundColor: 'rgba(244,162,97,0.1)',
+      fill: true, tension: 0.4, pointRadius: 5,
+      pointBackgroundColor: '#f4a261'
+    }]
+  },
+  options: { ...chartDefaults,
+    scales: {
+      x: { ticks:{color:'#adb5bd',font:{size:9}}, grid:{color:'#1e1e1e'} },
+      y: { ticks:{color:'#adb5bd',font:{size:10}}, grid:{color:'#1e1e1e'}, min: 0.8, max: 2.5 }
+    }
+  }
+});
+
+// ── MARGIN CHART ──
+new Chart(document.getElementById('marginChart'), {
+  type: 'bar',
+  data: {
+    labels: ['FY21','FY22','FY23','FY24','FY25'],
+    datasets: [
+      {
+        label: 'Subscription Gross Margin %',
+        data: [58, 67, 68, 68.5, 69.1],
+        backgroundColor: 'rgba(42,157,143,0.7)',
+        borderColor: '#2a9d8f', borderWidth: 1
+      },
+      {
+        label: 'Hardware Gross Margin %',
+        data: [12, -37, -13, 4.9, 13.6],
+        backgroundColor: 'rgba(230,57,70,0.7)',
+        borderColor: '#e63946', borderWidth: 1
+      }
+    ]
+  },
+  options: { ...chartDefaults,
+    scales: {
+      x: { ticks:{color:'#adb5bd',font:{size:10}}, grid:{color:'#1e1e1e'} },
+      y: { ticks:{color:'#adb5bd',font:{size:10}}, grid:{color:'#1e1e1e'} }
+    }
+  }
+});
+
+// ── FIXED COST CHART ──
+const subLevels = [3.5, 3.2, 3.0, 2.97, 2.8, 2.77, 2.5, 2.0, 1.5];
+const fixedCostPerSub = subLevels.map(s => Math.round(750 / s * 10) / 10);
+new Chart(document.getElementById('fixedCostChart'), {
+  type: 'line',
+  data: {
+    labels: subLevels.map(s => s.toFixed(2) + 'M'),
+    datasets: [{
+      label: 'Fixed Cost / Subscriber / Year ($)',
+      data: fixedCostPerSub,
+      borderColor: '#e63946',
+      backgroundColor: 'rgba(230,57,70,0.15)',
+      fill: true, tension: 0.3, pointRadius: 4,
+      pointBackgroundColor: '#e63946'
+    }]
+  },
+  options: { ...chartDefaults,
+    scales: {
+      x: { ticks:{color:'#adb5bd',font:{size:9}}, grid:{color:'#1e1e1e'}, reverse: true },
+      y: { ticks:{color:'#adb5bd',font:{size:10}}, grid:{color:'#1e1e1e'} }
+    }
+  }
+});
+
+// ── SPIRAL CALCULATOR ──
+function calcSpiral() {
+  const subs = parseFloat(document.getElementById('sliderSubs').value);
+  const fixed = parseFloat(document.getElementById('sliderFixed').value);
+  const price = parseFloat(document.getElementById('sliderPrice').value);
+  const churn = parseFloat(document.getElementById('sliderChurn').value);
+
+  document.getElementById('valSubs').textContent = subs.toFixed(2) + 'M';
+  document.getElementById('valFixed').textContent = '$' + fixed + 'M';
+  document.getElementById('valPrice').textContent = '$' + price;
+  document.getElementById('valChurn').textContent = churn.toFixed(1) + '%';
+
+  const annualRev = subs * price * 12; // in millions
+  const fcps = fixed / subs; // fixed cost per sub per year
+  const churnAbs = subs * 1000 * (churn / 100); // in thousands
+  const revLost = churnAbs * price / 1000; // in millions
+  const subGM = 0.691;
+  const cm = price * subGM - (fcps / 12);
+
+  document.getElementById('calcRevenue').textContent = '$' + (annualRev / 1000).toFixed(2) + 'B';
+  document.getElementById('calcFCPS').textContent = '$' + fcps.toFixed(0);
+  document.getElementById('calcChurnAbs').textContent = churnAbs.toFixed(0) + 'K';
+  document.getElementById('calcRevLost').textContent = '$' + revLost.toFixed(1) + 'M';
+  document.getElementById('calcCM').textContent = '$' + cm.toFixed(1);
+
+  const riskEl = document.getElementById('calcRisk');
+  if (churn >= 2.5 || subs <= 2.0) {
+    riskEl.textContent = '🔴 CRITICAL';
+    riskEl.className = 'val danger';
+  } else if (churn >= 1.5 || subs <= 2.5) {
+    riskEl.textContent = '⚠ HIGH';
+    riskEl.className = 'val warn';
+  } else {
+    riskEl.textContent = '✓ MODERATE';
+    riskEl.className = 'val ok';
+  }
+
+  const cmEl = document.getElementById('calcCM');
+  cmEl.className = cm > 0 ? 'val ok' : 'val danger';
+}
+
+calcSpiral();
+</script>
+</body>
+</html>
